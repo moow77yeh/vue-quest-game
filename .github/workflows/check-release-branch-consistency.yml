@@ -1,42 +1,40 @@
 name: Release Branch Integrity Check
 
-on:
-  push:
-    branches:
-      - 'release/*'
+name: Ensure main contains release commits
 
-  create:
-    tags:
-      - '*'
+on:
+  pull_request:
+    branches:
+      - release/**  # PR 目標是 release/*
+    paths-ignore:
+      - '**.md'     # 可選：略過文檔變更
+    types: [opened, synchronize, reopened]
 
 jobs:
-  check-main-inclusion:
-    if: github.event_name == 'push'
+  check-main-contains:
     runs-on: ubuntu-latest
+    if: startsWith(github.head_ref, 'hotfix/')
     steps:
-      - name: Checkout
+      - name: Checkout all history
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # 取得完整 Git 歷史，才能比較 commit
 
-      - name: Get current branch
-        id: branch
-        run: echo "branch_name=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
-
-      - name: Fetch all branches
-        run: git fetch --all
-
-      - name: Check if commits exist in main
+      - name: Check that main contains hotfix commits
         run: |
-          echo "Checking commits in '${{ steps.branch.outputs.branch_name }}' not in 'main'..."
-          MISSING_COMMITS=$(git cherry origin/main HEAD | grep '^+' || true)
+          echo "Checking if commits from ${{ github.head_ref }} are already in main..."
+          git fetch origin main
+          MISSING=$(git cherry origin/main HEAD | grep '^+' || true)
 
-          if [ -n "$MISSING_COMMITS" ]; then
-            echo "::warning::下列 commit 存在於 '${{ steps.branch.outputs.branch_name }}'，但未合併至 main："
-            echo "$MISSING_COMMITS"
+          if [[ -n "$MISSING" ]]; then
+            echo "❌ The following commits from '${{ github.head_ref }}' are NOT in 'main':"
+            echo "$MISSING"
+            echo ""
+            echo "Please merge '${{ github.head_ref }}' into 'main' before merging into release."
           else
-            echo "所有 commit 已包含在 main 中。"
+            echo "✅ All commits from '${{ github.head_ref }}' are already in 'main'."
           fi
+
 
   check-tag-against-previous-release:
     if: github.event_name == 'create' && startsWith(github.ref, 'refs/tags/')
