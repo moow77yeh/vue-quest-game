@@ -1,0 +1,41 @@
+name: Validate Release Branch Contains Previous
+
+on:
+  create: # 觸發於建立分支或 tag 時
+    branches:
+      - release/**
+
+jobs:
+  check-release-history:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout all refs
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 需要完整歷史紀錄才能比較 commit
+
+      - name: Determine current and previous release branches
+        id: branch-info
+        run: |
+          CURRENT="${GITHUB_REF#refs/heads/}"
+          echo "Current release branch: $CURRENT"
+
+          PREVIOUS=$(git branch -r --sort=-creatordate | grep 'origin/release/' | grep -v "origin/$CURRENT" | head -n 1 | sed 's|origin/||')
+          echo "Previous release branch: $PREVIOUS"
+
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          echo "previous=$PREVIOUS" >> $GITHUB_OUTPUT
+
+      - name: Validate current release contains previous
+        if: steps.branch-info.outputs.previous != ''
+        run: |
+          git fetch origin
+          MISSING=$(git cherry "origin/${{ steps.branch-info.outputs.current }}" "origin/${{ steps.branch-info.outputs.previous }}" | grep '^+' || true)
+
+          if [ -n "$MISSING" ]; then
+            echo "::error::'${{ steps.branch-info.outputs.current }}' does NOT contain all commits from '${{ steps.branch-info.outputs.previous }}'."
+            echo "$MISSING"
+            exit 1
+          else
+            echo "✅ '${{ steps.branch-info.outputs.current }}' includes all commits from '${{ steps.branch-info.outputs.previous }}'."
+          fi
