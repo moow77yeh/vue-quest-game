@@ -1,4 +1,4 @@
-name: Ensure main contains release commits
+name: Ensure master contains release commits
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  check-main-contains:
+  check-master-contains:
     runs-on: ubuntu-latest
     if: startsWith(github.head_ref, 'hotfix/')
     steps:
@@ -18,20 +18,20 @@ jobs:
         with:
           fetch-depth: 0 # 取得完整 Git 歷史，才能比較 commit
 
-      - name: Check that main contains hotfix commits
+      - name: Check that master contains hotfix commits
         run: |
-          echo "Checking if commits from ${{ github.head_ref }} are already in main..."
-          git fetch origin main
-          MISSING=$(git cherry origin/main HEAD | grep '^+' || true)
+          echo "Checking if commits from ${{ github.head_ref }} are already in master..."
+          git fetch origin master
+          MISSING=$(git cherry origin/master HEAD | grep '^+' || true)
 
           if [[ -n "$MISSING" ]]; then
-            echo "❌ The following commits from '${{ github.head_ref }}' are NOT in 'main':"
+            echo "❌ The following commits from '${{ github.head_ref }}' are NOT in 'master':"
             echo "$MISSING"
             echo ""
-            echo "Please merge '${{ github.head_ref }}' into 'main' before merging into release."
+            echo "Please merge '${{ github.head_ref }}' into 'master' before merging into release."
             exit 1
           else
-            echo "✅ All commits from '${{ github.head_ref }}' are already in 'main'."
+            echo "✅ All commits from '${{ github.head_ref }}' are already in 'master'."
           fi
 
   check-tag-against-previous-release:
