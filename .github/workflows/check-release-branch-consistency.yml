@@ -1,13 +1,11 @@
-name: Release Branch Integrity Check
-
 name: Ensure main contains release commits
 
 on:
   pull_request:
     branches:
-      - release/**  # PR 目標是 release/*
+      - release/** # PR 目標是 release/*
     paths-ignore:
-      - '**.md'     # 可選：略過文檔變更
+      - '**.md' # 可選：略過文檔變更
     types: [opened, synchronize, reopened]
 
 jobs:
@@ -18,7 +16,7 @@ jobs:
       - name: Checkout all history
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 取得完整 Git 歷史，才能比較 commit
+          fetch-depth: 0 # 取得完整 Git 歷史，才能比較 commit
 
       - name: Check that main contains hotfix commits
         run: |
@@ -31,69 +29,7 @@ jobs:
             echo "$MISSING"
             echo ""
             echo "Please merge '${{ github.head_ref }}' into 'main' before merging into release."
+            exit 1
           else
             echo "✅ All commits from '${{ github.head_ref }}' are already in 'main'."
           fi
-
-
-  check-tag-against-previous-release:
-    if: github.event_name == 'create' && startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout all refs
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Set tag name and commit
-        id: tag
-        run: |
-          TAG_NAME="${GITHUB_REF#refs/tags/}"
-          TAG_COMMIT=$(git rev-list -n 1 "$TAG_NAME")
-          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "commit=$TAG_COMMIT" >> $GITHUB_OUTPUT
-
-      - name: Find release branch that contains the tag
-        id: branch
-        run: |
-          BRANCH=$(git branch -r --contains ${{ steps.tag.outputs.commit }} | grep 'origin/release/' | head -n 1 | sed 's|origin/||')
-          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
-
-      - name: Fetch all branches
-        run: git fetch --all
-
-      - name: Compare with previous release branch
-        id: check
-        run: |
-          CURRENT="${{ steps.branch.outputs.branch }}"
-          if [ -z "$CURRENT" ]; then
-            echo "::notice::找不到 tag 所屬的 release 分支，跳過檢查。"
-            exit 0
-          fi
-
-          PREVIOUS=$(git branch -r --sort=-creatordate | grep 'origin/release/' | grep -v "origin/$CURRENT" | head -n 1 | sed 's|origin/||')
-
-          if [ -z "$PREVIOUS" ]; then
-            echo "::notice::這是第一個 release 分支，略過檢查。"
-            exit 0
-          fi
-
-          echo "檢查 '$CURRENT' 是否包含 '$PREVIOUS' 的所有 commit..."
-
-          MISSING=$(git cherry "$CURRENT" "origin/$PREVIOUS" | grep '^+' || true)
-
-          if [ -n "$MISSING" ]; then
-            echo "::warning::'$CURRENT' 未包含 '$PREVIOUS' 的所有 commit。將刪除 tag '${{ steps.tag.outputs.tag }}'。"
-            echo "missing_commits=true" >> $GITHUB_OUTPUT
-          else
-            echo "'$CURRENT' 已包含 '$PREVIOUS' 的所有 commit。"
-            echo "missing_commits=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Delete invalid tag if needed
-        if: steps.check.outputs.missing_commits == 'true'
-        run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git push origin :refs/tags/${{ steps.tag.outputs.tag }}
