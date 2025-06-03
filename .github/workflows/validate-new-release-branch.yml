@@ -1,7 +1,7 @@
 name: Validate Release Branch Contains Previous
 
 on:
-  create: # 觸發於建立分支或 tag 時
+  create:
     branches:
       - release/**
 
@@ -12,7 +12,7 @@ jobs:
       - name: Checkout all refs
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # 需要完整歷史紀錄才能比較 commit
+          fetch-depth: 0
 
       - name: Determine current and previous release branches
         id: branch-info
@@ -28,6 +28,7 @@ jobs:
           echo "previous=$PREVIOUS" >> $GITHUB_OUTPUT
 
       - name: Validate current release contains previous
+        id: validate
         if: steps.branch-info.outputs.previous != ''
         run: |
           git fetch origin
@@ -36,7 +37,18 @@ jobs:
           if [ -n "$MISSING" ]; then
             echo "::error::'${{ steps.branch-info.outputs.current }}' does NOT contain all commits from '${{ steps.branch-info.outputs.previous }}'."
             echo "$MISSING"
+            echo "delete_branch=true" >> $GITHUB_OUTPUT
             exit 1
           else
             echo "✅ '${{ steps.branch-info.outputs.current }}' includes all commits from '${{ steps.branch-info.outputs.previous }}'."
+            echo "delete_branch=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Delete invalid release branch
+        if: failure()
+        run: |
+          BRANCH="${{ steps.branch-info.outputs.current }}"
+          echo "Deleting invalid release branch: $BRANCH"
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git push origin --delete "$BRANCH"
