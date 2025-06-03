@@ -33,3 +33,65 @@ jobs:
           else
             echo "✅ All commits from '${{ github.head_ref }}' are already in 'main'."
           fi
+
+  check-tag-against-previous-release:
+  if: github.event_name == 'create' && startsWith(github.ref, 'refs/tags/')
+  runs-on: ubuntu-latest
+  steps:
+    - name: Checkout all refs
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+
+    - name: Set tag name and commit
+      id: tag
+      run: |
+        TAG_NAME="${GITHUB_REF#refs/tags/}"
+        TAG_COMMIT=$(git rev-list -n 1 "$TAG_NAME")
+        echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+        echo "commit=$TAG_COMMIT" >> $GITHUB_OUTPUT
+
+    - name: Find release branch that contains the tag
+      id: branch
+      run: |
+        BRANCH=$(git branch -r --contains ${{ steps.tag.outputs.commit }} | grep 'origin/release/' | head -n 1 | sed 's|origin/||')
+        echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+    - name: Fetch all branches
+      run: git fetch --all
+
+    - name: Compare with previous release branch
+      id: check
+      run: |
+        CURRENT="${{ steps.branch.outputs.branch }}"
+        if [ -z "$CURRENT" ]; then
+          echo "::notice::Could not find the release branch containing the tag. Skipping check."
+          exit 0
+        fi
+
+        PREVIOUS=$(git branch -r --sort=-creatordate | grep 'origin/release/' | grep -v "origin/$CURRENT" | head -n 1 | sed 's|origin/||')
+
+        if [ -z "$PREVIOUS" ]; then
+          echo "::notice::This is the first release branch. Skipping check."
+          exit 0
+        fi
+
+        echo "Checking if '$CURRENT' contains all commits from '$PREVIOUS'..."
+
+        MISSING=$(git cherry "$CURRENT" "origin/$PREVIOUS" | grep '^+' || true)
+
+        if [ -n "$MISSING" ]; then
+          echo "::warning::'$CURRENT' does not contain all commits from '$PREVIOUS'. The tag '${{ steps.tag.outputs.tag }}' will be deleted."
+          echo "missing_commits=true" >> $GITHUB_OUTPUT
+        else
+          echo "'$CURRENT' contains all commits from '$PREVIOUS'."
+          echo "missing_commits=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Delete invalid tag if needed
+      if: steps.check.outputs.missing_commits == 'true'
+      run: |
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
+        git push origin :refs/tags/${{ steps.tag.outputs.tag }}
