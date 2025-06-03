@@ -21,6 +21,7 @@ jobs:
           echo "Current release branch: $CURRENT"
 
           PREVIOUS=$(git branch -r --sort=-creatordate | grep 'origin/release/' | grep -v "origin/$CURRENT" | head -n 1 | sed 's|origin/||')
+          PREVIOUS="$(echo "$PREVIOUS" | xargs)"
           echo "Previous release branch: $PREVIOUS"
 
           echo "current=$CURRENT" >> $GITHUB_OUTPUT
