@@ -32,7 +32,7 @@
     <div class="quest">
       <h3>第{{ curr + 1 }}題: {{ questions[curr].quest }}</h3>
       <label v-for="(answer, index) in questions[curr].options">
-        <input type="radio" :value="answer.value" v-model="questions[curr].selected">
+        <input type="radio" :value="answer.value" v-model="questions[curr].selectedd">
         {{ index + 1 }}. {{ answer.ans }}
       </label>
 
@@ -47,7 +47,7 @@
     el: '#app',
     data: {
       curr: 0,
-      selfQuestions: []
+      selfQuestions: [],
       questions: [
         {
           quest: '如果你是童話故事中，想吃掉三隻小豬的大野狼，你認為使用哪一種方法可以容易吃掉他們？',
@@ -127,14 +127,16 @@
           return false;
         }
       },
-      save: function(fromObj, ToObj) {
-        ToObj = [];
-        var q;
-        for(q in fromObj) {
-          ToObj.push({
-
+      save: function(fromObj, toObj) {
+        toObj = [];
+        for(var i = 0; i < fromObj.length; i++) {
+          toObj.push({
+            quest: fromObj[i].quest,
+            options: fromObj[i].options,
+            selected: fromObj[i].selected
           });
         }
+        return toObj;
       },
     },
   });
